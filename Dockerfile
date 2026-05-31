@@ -1,13 +1,9 @@
-FROM node:20-alpine
+FROM nginx:alpine
 
-WORKDIR /app
-
-COPY package*.json ./
-
-RUN npm install
-
-COPY . .
+COPY build/ /usr/share/nginx/html/
 
 EXPOSE 3000
 
-CMD ["npm","start"]
+RUN sed -i 's/listen       80;/listen       3000;/' /etc/nginx/conf.d/default.conf
+
+CMD ["nginx", "-g", "daemon off;"]
