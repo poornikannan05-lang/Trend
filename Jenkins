@@ -1,0 +1,85 @@
+pipeline {
+
+    agent any
+
+    environment {
+
+        DOCKER_USER = "dockerhubuser"
+        IMAGE_NAME  = "trend-app"
+    }
+
+    stages {
+
+        stage('Checkout') {
+
+            steps {
+                git 'https://github.com/Vennilavanguvi/Trend.git'
+            }
+        }
+
+        stage('Build Image') {
+
+            steps {
+                sh '''
+                docker build -t $DOCKER_USER/$IMAGE_NAME:$BUILD_NUMBER .
+                '''
+            }
+        }
+
+        stage('Docker Login') {
+
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'dockerhub-creds',
+                        usernameVariable: 'DOCKER_USERNAME',
+                        passwordVariable: 'DOCKER_PASSWORD'
+                    )
+                ]) {
+
+                    sh '''
+                    echo $DOCKER_PASSWORD | docker login \
+                    -u $DOCKER_USERNAME --password-stdin
+                    '''
+                }
+            }
+        }
+
+        stage('Push Image') {
+
+            steps {
+                sh '''
+                docker push $DOCKER_USER/$IMAGE_NAME:$BUILD_NUMBER
+
+                docker tag \
+                $DOCKER_USER/$IMAGE_NAME:$BUILD_NUMBER \
+                $DOCKER_USER/$IMAGE_NAME:latest
+
+                docker push $DOCKER_USER/$IMAGE_NAME:latest
+                '''
+            }
+        }
+
+        stage('Deploy To EKS') {
+
+            steps {
+
+                sh '''
+                kubectl apply -f k8s/deployment.yaml
+                kubectl apply -f k8s/service.yaml
+                '''
+            }
+        }
+    }
+
+    post {
+
+        success {
+            echo "Deployment Successful"
+        }
+
+        failure {
+            echo "Deployment Failed"
+        }
+    }
+}
